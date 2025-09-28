@@ -3,7 +3,6 @@
 
 # ignore data
 data/
-visualization/
 
 # ignore unnecessary files
 __pycache__/
