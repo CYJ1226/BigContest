@@ -1,0 +1,11 @@
+# ignore .ipynb_checkpoints
+.ipynb_checkpoints/
+
+# ignore data
+data/
+visualization/
+
+# ignore unnecessary files
+__pycache__/
+*.pyc
+.env
