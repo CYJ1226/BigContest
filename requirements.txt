@@ -1,0 +1,13 @@
+numpy==2.0.0
+pandas==2.3.2
+matplotlib==3.10.6
+seaborn==0.13.2
+folium==0.20.0
+geopy==2.4.1
+scikit-learn==1.7.1
+scipy==1.15.3
+pgeocode==0.5.0
+haversine==2.9.0
+lightgbm==4.6.0
+xgboost==3.0.5
+catboost==1.2.8
