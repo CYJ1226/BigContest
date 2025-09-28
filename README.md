@@ -1,15 +1,14 @@
 # BigContest
----
 Our neighborhood franchisees, catch the signs of crisis early!
 Data From: https://www.bigcontest.or.kr/
 
 ## 📖 Introduce
----
 Analyzing franchise data during 2023~2024, predict which franchise store will be at risk after July 2025.
 
 ## 📂 Structure
----
+```
 BigContest/
+├─ README.md                                        # 프로젝트 설명 및 구조 안내
 ├─ requirements.txt                                 # 버전 통일
 ├─.gitignore                                        # git 추적 제외 파일/폴더
 ├─ notebooks                                        # ipynb 파일
@@ -22,3 +21,4 @@ BigContest/
 │  └─ processed
 ├─ visualization                                    # 시각화 이미지, 보고서
 └─ scripts                                          # 재사용 가능한 python 스크립트 (모듈)
+```
