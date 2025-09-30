@@ -128,13 +128,13 @@ class ModelTuner:
             
         elif self.model_name == 'svc_linear':
             return {
-                'C': hp.loguniform('C', np.log(0.01), np.log(100)),
+                'C': hp.loguniform('C', np.log(0.01), np.log(1000)),
                 'class_weight': hp.choice('class_weight', [None, 'balanced'])
             }
             
         elif self.model_name == 'svc_rbf':
             return {
-                'C': hp.loguniform('C', np.log(0.01), np.log(100)),
+                'C': hp.loguniform('C', np.log(0.01), np.log(1000)),
                 'gamma': hp.loguniform('gamma', np.log(0.0001), np.log(1)),
                 'class_weight': hp.choice('class_weight', [None, 'balanced'])
             }
@@ -227,8 +227,7 @@ class ModelTuner:
             score = np.mean(recall_scores_list)
                 
         else:
-            X_data = self.X_train if self.model_name in ['gnb'] else self.X_train
-            #X_data = self.X_train.toarray() if self.model_name in ['gnb'] else self.X_train
+            X_data = self.X_train.toarray() if self.model_name in ['gnb'] else self.X_train
             score = cross_val_score(model, X_data, self.y_train, cv=self.cv_number, scoring='recall').mean()
 
         return {'loss': -score, 'status': STATUS_OK}
@@ -276,7 +275,7 @@ class ModelTuner:
         self.final_model = self._get_model(self.best_params)
         
         if self.model_name in ['gnb']:
-            self.final_model.fit(self.X_train, self.y_train)
+            self.final_model.fit(self.X_train.toarray(), self.y_train)
             
         elif self.model_name == 'xgb':
             self.final_model.fit(self.X_train, self.y_train, eval_set=[(self.X_tr, self.y_tr), (self.X_val, self.y_val)], verbose=False)
@@ -293,7 +292,7 @@ class ModelTuner:
         if self.final_model is None:
             raise Exception("모델이 먼저 학습되어야 합니다.")
         
-        X_test_data = self.X_test if self.model_name in ['gnb'] else self.X_test
+        X_test_data = self.X_test.toarray() if self.model_name in ['gnb'] else self.X_test
         model_eval(self.final_model, self.model_name.upper(), X_test_data, self.y_test)
 
     def run(self, tune_evals=50):
