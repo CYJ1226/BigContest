@@ -60,6 +60,13 @@ def preprocess_cust(cust_df):
     cust_cols = cust_df_prc.iloc[:, 2:].columns
     cust_df_prc[cust_cols] = cust_df_prc[cust_cols].clip(lower=0)
 
+     #  100 - (첫방문 비율 + 재방문 비율) 나타내는 컬럼 추가
+    cust_df_prc['visit_unknown'] = 100 - (cust_df_prc['visit_re'] + cust_df_prc['visit_new'])
+
+    # visit 관련 컬럼끼리 보기 편하게 컬럼 순서 조정
+    cust_df_prc = cust_df_prc[['mct_id', 'trans_date', 'male_u20', 'male_u30', 'male_u40', 'male_u50', 'male_u60', 'female_u20', 'female_u30', 'female_u40',
+                                                   'female_u50', 'female_u60', 'visit_re', 'visit_new', 'visit_unknown', 'route_resident', 'route_worker', 'route_floating']]
+    
     #  가맹점별 고객정보 평균계산
     cust_df_prc = cust_df_prc.drop('trans_date', axis=1).groupby('mct_id').mean().reset_index()
 
