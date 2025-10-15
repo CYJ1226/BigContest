@@ -12,14 +12,14 @@ cust_df = pd.read_csv('../data/raw/big_data_set3_f.csv', encoding='cp949')
 ## 컬럼명 변경
 def rename_column(merchant_df, sale_df, cust_df):
     # merchant_df 컬럼명 변경
-    merchant_df.columns = ['mct_id', 'mct_address', 'mct_name', 'brand_code', 'sigungu', 'industry_name', 'commercial_area', 'open_date', 'close_date']
+    merchant_df.columns = ['가맹점 구분번호', '가맹점 주소', '가맹점명', '브랜드 구분코드', '가맹점 지역', '업종', '상권', '개업일', '폐업일']
 
     # sale_df 컬럼명 변경
-    sale_df.columns = ['mct_id', 'trans_date', 'operation_band', 'sale_amt_band', 'sale_cnt_band', 'unique_customer_band', 'aov_band', 'cancel_rate_band', 'delivery_sale_amount_ratio', 
-                       'industry_sale_amt_ratio', 'industry_sale_cnt_ratio', 'industry_sale_rank_pct', 'area_sale_rank_pct', 'industry_close_pct', 'area_close_pct']
+    sale_df.columns = ['가맹점 구분번호', '기준년월', '가맹점 운영개월수 구간', '매출금액 구간', '매출건수 구간', '유니크 고객 수 구간', '객단가 구간', '취소율 구간', '배달매출금액 비율', 
+                       '동일 업종 매출금액 비율', '동일 업종 매출건수 비율', '동일 업종 내 매출 순위 비율', '동일 상권 내 매출 순위 비율', '동일 업종 내 해지 가맹점 비중', '동일 상권 내 해지 가맹점 비중']
     # cust_df 컬럼명 변경
-    cust_df.columns = ['mct_id', 'trans_date', 'male_u20', 'male_u30', 'male_u40', 'male_u50', 'male_u60', 'female_u20', 'female_u30', 'female_u40', 'female_u50', 'female_u60', 
-                       'visit_re', 'visit_new', 'route_resident', 'route_worker', 'route_floating']
+    cust_df.columns = ['가맹점 구분번호', '기준년월', '남성 20대이하 고객 비중', '남성 30대 고객 비중', '남성 40대 고객 비중', '남성 50대 고객 비중', '남성 60대이상 고객 비중', '여성 20대이하 고객 비중', 
+                       '여성 30대 고객 비중', '여성 40대 고객 비중', '여성 50대 고객 비중', '여성 60대이상 고객 비중','재방문 고객 비중', '신규 고객 비중', '거주 이용 고객 비율', '직장 이용 고객 비율', '유동인구 이용 고객 비율']
     
     return merchant_df, sale_df, cust_df
 
@@ -30,22 +30,22 @@ def preprocess_sale(sale_df):
     sale_df_prc = sale_df.copy()
 
     # 구간 데이터 앞에 숫자만 빼오기
-    sale_df_prc.loc[:, 'operation_band':'cancel_rate_band'] = sale_df_prc.loc[:, 'operation_band':'cancel_rate_band'].apply(lambda x: x.str.split('_', expand=True)[0])
+    sale_df_prc.loc[:, '가맹점 운영개월수 구간':'취소율 구간'] = sale_df_prc.loc[:, '가맹점 운영개월수 구간':'취소율 구간'].apply(lambda x: x.str.split('_', expand=True)[0])
 
     # 결측치 최빈값으로 대체 후 구간 데이터들의 자료형 int형으로 변환
     # 가정: 결측값의 경우 취소율이 적다고 판단!!
-    band_cols = sale_df_prc.loc[:, 'operation_band':'cancel_rate_band'].columns
+    band_cols = sale_df_prc.loc[:, '가맹점 운영개월수 구간':'취소율 구간'].columns
     sale_df_prc[band_cols] = sale_df_prc[band_cols].fillna(1).astype(int)
 
     ## 비율 데이터 전처리
     # 배달매출금액 비율의 -999999.9는 배달매출 미존재 의미 => 0으로 대체 가능 (배달매출금액 비율이 처음부터 0인 데이터도 있긴 함)
-    sale_df_prc['delivery_sale_amount_ratio'] = sale_df_prc['delivery_sale_amount_ratio'].map(lambda x: 0 if x < 0 else x)
+    sale_df_prc['배달매출금액 비율'] = sale_df_prc['배달매출금액 비율'].map(lambda x: 0 if x < 0 else x)
 
     # 동일 상권 내 해지 가맹점 비중의 -999999.9는 상권 미존재 의미 => 100으로 할 수 도 있겠으나 일단 0으로 대체
-    sale_df_prc['area_close_pct'] = sale_df_prc['area_close_pct'].map(lambda x: 0 if x < 0 else x)
+    sale_df_prc['동일 상권 내 해지 가맹점 비중'] = sale_df_prc['동일 상권 내 해지 가맹점 비중'].map(lambda x: 0 if x < 0 else x)
 
     # 가맹점별 매출정보 평균계산
-    sale_df_prc = sale_df_prc.drop('trans_date', axis=1).groupby('mct_id').mean().reset_index()
+    sale_df_prc = sale_df_prc.drop('기준년월', axis=1).groupby('가맹점 구분번호').mean().reset_index()
 
     # sale_df_prc 데이터와 merchant_df 결합한 데이터 merged_df에 저장
     return sale_df_prc
@@ -61,14 +61,14 @@ def preprocess_cust(cust_df):
     cust_df_prc[cust_cols] = cust_df_prc[cust_cols].clip(lower=0)
 
      #  100 - (첫방문 비율 + 재방문 비율) 나타내는 컬럼 추가
-    cust_df_prc['visit_unknown'] = 100 - (cust_df_prc['visit_re'] + cust_df_prc['visit_new'])
+    cust_df_prc['알수 없는 방문 고객 비중'] = 100 - (cust_df_prc['재방문 고객 비중'] + cust_df_prc['신규 고객 비중'])
 
     # visit 관련 컬럼끼리 보기 편하게 컬럼 순서 조정
-    cust_df_prc = cust_df_prc[['mct_id', 'trans_date', 'male_u20', 'male_u30', 'male_u40', 'male_u50', 'male_u60', 'female_u20', 'female_u30', 'female_u40',
-                                                   'female_u50', 'female_u60', 'visit_re', 'visit_new', 'visit_unknown', 'route_resident', 'route_worker', 'route_floating']]
+    cust_df_prc = cust_df_prc[['가맹점 구분번호', '기준년월', '남성 20대이하 고객 비중', '남성 30대 고객 비중', '남성 40대 고객 비중', '남성 50대 고객 비중', '남성 60대이상 고객 비중', '여성 20대이하 고객 비중', '여성 30대 고객 비중', 
+                               '여성 40대 고객 비중','여성 50대 고객 비중', '여성 60대이상 고객 비중', '재방문 고객 비중', '신규 고객 비중', '알수 없는 방문 고객 비중', '거주 이용 고객 비율', '직장 이용 고객 비율', '유동인구 이용 고객 비율']]
     
     #  가맹점별 고객정보 평균계산
-    cust_df_prc = cust_df_prc.drop('trans_date', axis=1).groupby('mct_id').mean().reset_index()
+    cust_df_prc = cust_df_prc.drop('기준년월', axis=1).groupby('가맹점 구분번호').mean().reset_index()
 
     # cust_df_prc 데이터 merged_df에 추가
     return cust_df_prc
@@ -77,6 +77,10 @@ def preprocess_cust(cust_df):
 def preprocess_merchant(merchant_df):
     # 복사본 생성
     merchant_df_prc = merchant_df.copy()
+
+    #개업일 자료형을 숫자에서 날짜형으로 변환
+    merchant_df_prc['개업일'] = pd.to_datetime(merchant_df_prc['개업일'])
+    merchant_df_prc['개업 기간'] = (pd.to_datetime('2025-07-01')-merchant_df_prc['개업일']).dt.day
     
     ## 업종 그룹화 
     meat = ['한식-육류/고기',  '꼬치구이']
@@ -94,16 +98,16 @@ def preprocess_merchant(merchant_df):
     others = ['식품 제조',  '반찬',  '미곡상',  '유제품',  '인삼제품', '건강식품', '건강원', '담배',  '식료품']
 
     # replace 진행
-    groups_to_replace = [(meat, 'meat'), (cafe, 'cafe'), (k_food, 'k_food'), (w_food, 'w_food'), (j_food, 'j_food'),
-                         (c_food, 'c_food'), (drink, 'drink'), (product, 'product'), (enter, 'enter'), (convenience, 'convenience'),
-                         (world_food, 'world_food'), (dessert, 'dessert'), (others, 'others')]
+    groups_to_replace = [(meat, '육류'), (cafe, '카페'), (k_food, '한식'), (w_food, '양식'), (j_food, '일식'),
+                         (c_food, '중식'), (drink, '주점'), (product, '농수축산물'), (enter, '유흥업소'), (convenience, '간편식'),
+                         (world_food, '이색요리'), (dessert, '디저트'), (others, '기타')]
     
     replacement = {}
     for ind, cat in groups_to_replace:
         for i in ind:
             replacement[i] = cat
 
-    merchant_df_prc['industry_name'].replace(replacement, inplace=True)
+    merchant_df_prc['업종'].replace(replacement, inplace=True)
 
     ## 상권 그룹화
     # 상권 데이터 1개만 존재하는 경우 주변 상권과 통합 (장한평자동차와 답십리는 모두 구석진 곳인데 가까우므로 결합)
@@ -111,10 +115,10 @@ def preprocess_merchant(merchant_df):
                         '방배역': '뚝섬', '건대입구': '뚝섬', '풍산지구': '뚝섬', '오남': '한양대',
                         '동대문역사문화공원역': '금남시장',  '압구정로데오': '금남시장',  '장한평자동차': '답십리'}
     
-    merchant_df_prc['commercial_area'].replace(areas_to_replace, inplace=True)
+    merchant_df_prc['상권'].replace(areas_to_replace, inplace=True)
 
     # 상권 결측치는 Unknown으로 대체
-    merchant_df_prc['commercial_area'].fillna('Unknown', inplace=True)
+    merchant_df_prc['상권'].fillna('Unknown', inplace=True)
     
     return merchant_df_prc
 
@@ -124,16 +128,16 @@ def preprocess_merged(merged_df):
     final_df = merged_df.copy()
 
     # is_closed 컬럼 생성
-    final_df['is_closed'] = final_df['close_date'].notna().astype(int)
+    final_df['폐업 여부'] = final_df['폐업일'].notna().astype(int)
 
     # 불필요 컬럼 제거
-    final_df.drop(['mct_id', 'mct_address', 'mct_name', 'brand_code', 'sigungu', 'open_date', 'close_date'], axis=1, inplace=True)
+    final_df.drop(['가맹점 구분번호', '가맹점 주소', '가맹점명', '브랜드 구분코드', '가맹점 지역', '개설일', '폐업일'], axis=1, inplace=True)
 
     # 상관계수 절댓값이 0.7 이상인 컬럼들이 있으면 둘 중 하나 제거
-    final_df.drop(['sale_amt_band', 'unique_customer_band', 'industry_sale_cnt_ratio', 'industry_sale_rank_pct'], axis=1, inplace=True)
+    final_df.drop(['매출금액 구간', '유니크 고객 수 구간', '동일 업종 매출건수 비율', '동일 업종 내 매출 순위 비율'], axis=1, inplace=True)
 
     # One-Hot Encoding 진행
-    final_df = pd.get_dummies(final_df, drop_first=True, dtype=int)
+    #final_df = pd.get_dummies(final_df, drop_first=True, dtype=int)
 
     return final_df
 
@@ -152,7 +156,7 @@ def apply_all(merchant_df, sale_df, cust_df):
     cust_df_prc = preprocess_cust(cust_df)
 
     # merchant, sale, cust 통합
-    merged_df = merchant_df.merge(sale_df_prc, on='mct_id').merge(cust_df_prc, on='mct_id')
+    merged_df = merchant_df.merge(sale_df_prc, on='가맹점 구분번호').merge(cust_df_prc, on='가맹점 구분번호')
     
     # merged_df 전처리
     final_df = preprocess_merged(merged_df)
