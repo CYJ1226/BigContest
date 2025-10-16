@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import shap
 import matplotlib.pyplot as plt
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
@@ -15,13 +16,14 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_s
                              matthews_corrcoef, confusion_matrix, roc_curve, auc, 
                              precision_recall_curve)
 from sklearn import metrics
+from sklearn.inspection import permutation_importance
 
 from lightgbm import LGBMClassifier
 import lightgbm as lgbm
 from xgboost import XGBClassifier
 import xgboost as xgb
-
-
+from xgboost import plot_importance
+ 
 #각 모델의 평가 지표를 보여주는 함수
 #정확도,정밀도,재현율,,F1 점수, mcc, 혼동 행렬, AUC-ROC,PR-AUC
 
@@ -301,3 +303,242 @@ class ModelTuner:
         self.tune(max_evals=tune_evals)
         self.train_final_model()
         self.evaluate()
+
+class Boost_model:
+    def __init__(self,model_type: str,train_data,GPU ='off',
+                 early_stopping_rounds = 50,n_estimators=500,learning_rate=0.05,
+                 min_gain_to_split=0.05, random_state=42, subsample=0.8,colsample_bytree=0.8):
+        
+        self.train_data = train_data
+        self.model_type = model_type
+        self.early_stopping_rounds = early_stopping_rounds
+        self.n_estimators = n_estimators
+        self.learning_rate= learning_rate
+        self.subsample = subsample
+        self.colsample_bytree = colsample_bytree
+        self.random_state = random_state
+        self.min_gain_to_split = min_gain_to_split
+        self.scale_pos_weight = (len(self.train_data.y_train) - sum(self.train_data.y_train)) / sum(self.train_data.y_train)
+        self.check_point = 0
+        self.GPU = GPU
+
+        params = {
+        'n_estimators': self.n_estimators,
+        'learning_rate': self.learning_rate,
+        'subsample': self.subsample,
+        'colsample_bytree': self.colsample_bytree,
+        'random_state': self.random_state}
+
+        if self.model_type == 'lgbm':
+
+            params.update({
+            'class_weight': 'balanced',
+            'min_gain_to_split': self.min_gain_to_split})    
+            
+            if self.GPU == 'on':
+                params['device'] = 'cuda'                  
+                
+            self.model = LGBMClassifier(**params)
+
+        elif self.model_type == 'xgb':
+
+            params.update({
+            'scale_pos_weight': self.scale_pos_weight,
+            'n_jobs': -1,
+            'use_label_encoder': False,
+            'early_stopping_rounds':self.early_stopping_rounds})
+
+            if self.GPU == 'on':
+                params['device'] = 'cuda'
+                params['tree_method'] = 'hist'
+
+            self.model = XGBClassifier(**params)
+        else:
+            raise ValueError("정확한 부스트 모델명을 입력해주세요(lgbm,xgb)")                      
+        
+    def fit(self):
+        if self.model is None:
+            raise ValueError("정확한 부스트 모델명을 입력해주세요(lgbm,xgb)")
+    
+        elif self.model_type == 'lgbm':
+            self.model.fit(
+            self.train_data.X_tr, self.train_data.y_tr,
+            eval_set=[(self.train_data.X_tr, self.train_data.y_tr), (self.train_data.X_val, self.train_data.y_val)]
+            ,callbacks=[lgbm.early_stopping(stopping_rounds=self.early_stopping_rounds, verbose=-1)])
+
+        elif self.model_type == 'xgb':
+            self.model.fit(
+            self.train_data.X_tr, self.train_data.y_tr,
+            eval_set=[(self.train_data.X_tr, self.train_data.y_tr), (self.train_data.X_val, self.train_data.y_val)], verbose=False)
+        
+        self.check_point += 1
+
+    def evaluation(self):
+        self.fit()
+        if self.model_type == 'lgbm':
+            title = "Light Gradient Boosting Machine"
+        elif self.model_type == 'xgb':
+            title = "Exreme Gradient Boosting"
+        else:
+            raise ValueError("정확한 부스트 모델명을 입력해주세요(lgbm,xgb)")
+        
+        model_eval(self.model,title,self.train_data.X_test,self.train_data.y_test)
+
+    def plot_feature_importance(self,top_n=20):
+        if self.check_point == 0:
+            raise ValueError("모델을 먼저 학습해야 합니다")
+        
+        importances = self.model.feature_importances_
+        features = self.train_data.X_val.columns
+
+        idx = np.argsort(importances)[::-1][:top_n]
+        plt.barh(np.array(features)[idx][::-1], np.array(importances)[idx][::-1])
+        plt.title(f"{self.model_type} Feature Importance (Top {top_n})")
+        plt.xlabel("Importance score")
+        plt.ylabel("Features")
+        plt.show()
+    
+    def permutation_importance_plot(self):
+        if self.check_point == 0:
+            raise ValueError("모델을 먼저 학습해야 합니다")
+
+        result = permutation_importance(
+            self.model, self.train_data.X_val, self.train_data.y_val,
+            scoring="f1",
+            n_repeats=1,
+            random_state=42,
+            n_jobs=-1)
+
+        fi = pd.DataFrame({
+            "feature": self.train_data.X_val.columns,
+            "importance": result.importances_mean
+        }).sort_values(by="importance", ascending=False)
+
+        print(fi.head(10))
+
+        top_features = fi.head(20)
+
+        plt.figure(figsize=(8, 6))
+        plt.barh(top_features["feature"], top_features["importance"], color="skyblue")
+        plt.xlabel("Permutation Importance")
+        plt.ylabel("Feature")
+        plt.title(f"{self.model_type} Top 20 Features by Permutation Importance")
+        plt.gca().invert_yaxis() 
+        plt.show()   
+
+class ShapAnalysis:
+    """
+    학습된 트리 기반 모델(XGBoost, LightGBM 등)의 예측 결과를
+    SHAP을 이용해 분석하고 시각화하는 클래스입니다.
+    """
+    def __init__(self, boost_model, train_data):
+        """
+        클래스를 초기화하고 모델과 데이터를 설정합니다.
+
+        Args:
+            train_data: train/test 데이터가 분리된 객체. 
+                        '.X_test', '.y_test' 속성으로 데이터에 접근 가능해야 합니다.
+        """
+        self.model = boost_model
+        self.X_test = train_data.X_test
+        self.y_test = train_data.y_test
+        self.explainer = shap.TreeExplainer(self.model)
+        
+        # 분석 결과를 저장할 인스턴스 변수
+        self.single_data_point = None
+        self.shap_values_single = None
+        self.expected_value = self.explainer.expected_value
+
+    def select_sample(self, index=0):
+        """분석을 수행할 단일 데이터 샘플을 선택합니다."""
+        self.single_data_point = self.X_test.iloc[[index]]
+        self.shap_values_single = self.explainer.shap_values(self.single_data_point)
+        print(f"--- 데이터 인덱스 {index}번 샘플에 대한 분석을 시작합니다. ---")
+        return self
+
+    def text_summary(self):
+        """
+        선택된 샘플의 예측 결과와 SHAP 기여도를 텍스트로 요약합니다.
+        폐업으로 예측하는 데 가장 큰 영향을 준 상위 5개 피쳐만 출력합니다.
+        """
+        if self.single_data_point is None:
+            raise ValueError("먼저 `select_sample` 메서드를 호출하여 분석할 데이터를 선택해주세요.")
+
+        probability_class_1 = self.model.predict_proba(self.single_data_point)[0, 1]
+        
+        print("\n" + "="*60)
+        print("예측 기여도 텍스트 요약")
+        print("="*60)
+        print(f"🎯 가맹점이 폐업할 예측 확률: {probability_class_1:.4f}\n")
+        print(f"📊 모델의 평균 예측 기준값 (Base Value): {self.expected_value[0]:.4f}\n")
+
+        shap_df = pd.DataFrame({
+            'Feature': self.single_data_point.columns,
+            'SHAP Value (기여도)': self.shap_values_single.flatten()
+        })
+        
+        positive_shap_df = shap_df[shap_df['SHAP Value (기여도)'] > 0]
+        
+        top5_positive = positive_shap_df.sort_values(by='SHAP Value (기여도)', ascending=False)
+        
+        print("폐업 예측 요인 TOP 5 피쳐:")
+
+        print(top5_positive.head(5).to_string())
+   
+        
+    def force_plot(self):
+        """단일 예측에 대한 SHAP Force Plot을 시각화합니다."""
+        if self.single_data_point is None:
+            raise ValueError("먼저 `select_sample` 메서드를 호출하여 분석할 데이터를 선택해주세요.")
+        shap.initjs()
+        print("\n>>>Force Plot (단일 데이터 예측 설명)")
+        display(shap.force_plot(
+            self.expected_value[0],
+            self.shap_values_single,
+            self.single_data_point
+        ))
+
+    def summary_plot(self):
+        """전체 테스트 데이터에 대한 SHAP Summary Plot을 시각화합니다."""
+        print("\n>>>Summary Plot (전체 특성 중요도)")
+        shap_values_all = self.explainer.shap_values(self.X_test)
+        
+        plt.figure(figsize=(10, 8))
+        shap.summary_plot(shap_values_all, self.X_test, show=False)
+        plt.title("SHAP Summary Plot", fontsize=14)
+        plt.tight_layout()
+        plt.show()
+
+    def custom_bar_plot(self):
+        """
+        폐업으로 예측하게 만드는 TOP 5 피쳐에 대한
+        Custom Bar Plot을 시각화합니다.
+        """
+        if self.single_data_point is None:
+            raise ValueError("먼저 `select_sample` 메서드를 호출하여 분석할 데이터를 선택해주세요.")
+        
+        print("\n>>>Custom Bar Plot (폐업 예측 긍정 영향 TOP 5)")
+        
+        shap_df = pd.DataFrame({
+            'Feature': self.single_data_point.columns,
+            'SHAP Value': self.shap_values_single.flatten()
+        })
+
+        positive_shap_df = shap_df[shap_df['SHAP Value'] > 0].sort_values(by='SHAP Value', ascending=False)
+        top5_positive_plot = positive_shap_df.head(5).sort_values(by='SHAP Value', ascending=True)
+        colors = ['red'] * len(top5_positive_plot)
+        
+        plt.figure(figsize=(10, 6))
+        plt.barh(top5_positive_plot['Feature'], top5_positive_plot['SHAP Value'], color=colors)
+        plt.title("폐업 예측 긍정 영향 TOP 5", fontsize=16)
+        plt.xlabel("SHAP Value (Contribution to Prediction)", fontsize=12)
+        plt.grid(axis='x', linestyle='--', alpha=0.6)
+        plt.axvline(x=0, color='black', linewidth=0.8)
+        plt.tight_layout()
+        plt.show()
+
+    def single_sample_analysis(self,index=0):
+        self.select_sample(index=index)
+        self.text_summary()
+        self.custom_bar_plot()
+        self.force_plot()

@@ -62,8 +62,62 @@ class Feature_Engineering:
         areas_to_replace = {'화양시장': '성수', '자양': '성수', '서면역': '성수', '미아사거리': '성수',
                             '방배역': '뚝섬', '건대입구': '뚝섬', '풍산지구': '뚝섬', '오남': '한양대',
                             '동대문역사문화공원역': '금남시장',  '압구정로데오': '금남시장',  '장한평자동차': '답십리'}
+        
         merchant_df_prc['상권'].replace(areas_to_replace, inplace=True)
         merchant_df_prc['상권'].fillna('Unknown', inplace=True)
+
+        ## 상권 결측치 대체
+        merchant_df_prc.loc[merchant_df_prc['상권']=='Unknown', '가맹점 주소'].str.split(expand=True)[2].value_counts()
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로 410')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로31')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('마장로 137')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('무학로 33')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('마장로35길')), '상권'] = '마장동'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('마장로37길')), '상권'] = '마장동'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('마장')), '상권'] = '마장동'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('금호로')), '상권'] = '신금호'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('행당로')), '상권'] = '행당'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로 58')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 구분번호'].str.contains('1F0AADBBB8')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로 16')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로14')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('동일로')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('광나루로')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('아차산로')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('매봉길')), '상권'] = '옥수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('옥수2동')), '상권'] = '옥수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('연무장')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('성덕정')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('서울숲2길')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('무학봉길')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('송정')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('성수')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('둘레1길')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('독서당로')), '상권'] = '행당'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로 50')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리로 6')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('왕십리')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('무학')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('난계로')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('홍익동')), '상권'] = '왕십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('살곶이')), '상권'] = '한양대'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('마조로')), '상권'] = '한양대'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('사근동')), '상권'] = '한양대'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('뚝섬로 3')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('뚝섬로1가')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('뚝섬로1길')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('서울숲길')), '상권'] = '뚝섬'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('뚝섬로')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('선릉')), '상권'] = '성수'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('고산자로')), '상권'] = '행당'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('응봉동')), '상권'] = '행당'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('장터')), '상권'] = '금남시장'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('동호')), '상권'] = '금남시장'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('청계천')), '상권'] = '마장동'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('금호')), '상권'] = '신금호'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('자동차시장길')), '상권'] = '답십리'
+        merchant_df_prc.loc[(merchant_df_prc['상권']=='Unknown') & (merchant_df_prc['가맹점 주소'].str.contains('용답')), '상권'] = '답십리'
+
         merchant_df_prc.drop(columns=['가맹점 주소','가맹점명','브랜드 구분코드','가맹점 지역','개업일'], inplace=True)
         self.merchant_df_prc = merchant_df_prc
         return self
@@ -129,13 +183,31 @@ class Feature_Engineering:
         
         self.total_df = total_df
         return self
+    
+    def outlier_remove(self,percent = 0.995):
+        upper_bound1 = self.total_df['동일 업종 매출금액 비율'].quantile(percent)
+        upper_bound2 = self.total_df['동일 업종 매출건수 비율'].quantile(percent)
 
-    def nonzero_select(self):
+        final_df = self.total_df[(self.total_df['동일 업종 매출금액 비율']<=upper_bound1)&(self.total_df['동일 업종 매출건수 비율']<=upper_bound2)]
+        self.total_df = final_df
+        return self
+
+    def select_merchants_by_status(self,data_select='part'):
         #폐업한 가계들 중 폐업 징조가 없는 월별 데이터 추출
         if self.total_df is None:
             raise ValueError("make_prediction_target 메서드를 먼저 실행해주세요.")
         
-        oc_mc_df = self.total_df[(self.total_df['폐업일'].notnull()) & (self.total_df['폐업 예측'] == 0)]
+        if data_select == 'part':
+            oc_mc_df = self.total_df[(self.total_df['폐업일'].notnull()) & (self.total_df['폐업 예측'] == 0)]
+        elif data_select == 'all':
+            oc_mc_df = self.total_df
+        elif data_select == 'not':
+            oc_mc_df = self.total_df[self.total_df['폐업일'].isnull()]
+        elif data_select == 'base':
+            oc_mc_df = self.total_df[self.total_df['폐업일'].notnull()]
+        else:
+            raise ValueError("정확한 학습 데이터 조건을 입력해주세요.")
+        
         oc_mc_list = oc_mc_df['가맹점 구분번호'].unique()
         self.total_df = self.total_df[self.total_df['가맹점 구분번호'].isin(oc_mc_list)].reset_index(drop=True)
         return self
@@ -179,14 +251,15 @@ class Feature_Engineering:
         self.total_df = df_copy
         return self
     
-    def run(self):
+    def run(self,percent = 0.995,data_select='part',months=[3,6],lag_periods=[1, 3, 6, 12]):
         self.rename_column()
         self.preprocess_merchant()
         self.preprocess_merged()
         self.make_prediction_target()
-        self.nonzero_select()
-        self.create_recent_ma(months=[3,6])
-        self.create_lag_features(lag_periods=[1, 3, 6, 12])
+        self.outlier_remove(percent = percent)
+        self.select_merchants_by_status(data_select=data_select)
+        self.create_recent_ma(months=months)
+        self.create_lag_features(lag_periods=lag_periods)
 
         #최종 병합
         final_df = self.total_df.merge(self.merchant_df_prc, on='가맹점 구분번호', suffixes=('', '_y'))
