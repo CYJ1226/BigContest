@@ -1,8 +1,10 @@
+import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import shap
 import matplotlib.pyplot as plt
+from rich import print
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
@@ -23,33 +25,40 @@ import lightgbm as lgbm
 from xgboost import XGBClassifier
 import xgboost as xgb
 from xgboost import plot_importance
+
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable
  
 #각 모델의 평가 지표를 보여주는 함수
 #정확도,정밀도,재현율,,F1 점수, mcc, 혼동 행렬, AUC-ROC,PR-AUC
 
+
 def model_eval(model_object, model_name: str, X_test, y_test):
     prediction = model_object.predict(X_test)
-    
-    # 평가지표 계산
-    accuracy = accuracy_score(y_test, prediction)
-    precision = precision_score(y_test, prediction)
-    recall = recall_score(y_test, prediction)
-    f1 = f1_score(y_test, prediction)
-    mcc = matthews_corrcoef(y_test, prediction)
 
-    print(f'--- {model_name} 모델 평가 ---')
-    print(f'정확도(Accuracy): {accuracy:.4f}')
-    print(f'정밀도(Precision): {precision:.4f}')
-    print(f'재현율(Recall): {recall:.4f}')
-    print(f'F1 점수(F1 Score): {f1:.4f}')
-    print(f'매튜 상관 계수(MCC): {mcc:.4f}\n')
+    # 평가지표 계산
+    metrics = {
+    '정확도 (Accuracy)': accuracy_score,
+    '정밀도 (Precision)': precision_score,
+    '재현율 (Recall)': recall_score,
+    'F1 점수 (F1-Score)': f1_score,
+    '매튜 상관 계수 (MCC)': matthews_corrcoef}
+    
+    results = {}
+    
+    metrics = {name: func(y_test, prediction) for name, func in metrics.items()}
+    results['모델 평가 지표'] = metrics
+
+    results_df = pd.DataFrame(results).round(4)
+    display(results_df) 
     
     # 폰트 설정
     plt.rcParams['font.family'] = 'NanumGothic'
     plt.rcParams['axes.unicode_minus'] = False
 
     # 그래프 레이아웃 설정
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
     fig.suptitle(f'{model_name} 모델 평가', fontsize=18)
 
     # 혼동 행렬
@@ -59,6 +68,8 @@ def model_eval(model_object, model_name: str, X_test, y_test):
                 yticklabels=['폐업(1)', '운영 중(0)'])
     axes[0, 0].set_aspect('equal')
     axes[0, 0].set_title('Confusion Matrix (혼동 행렬)', fontsize=14)
+    axes[0, 0].set_xlabel('Predicted Label')
+    axes[0, 0].set_ylabel('True Label')
     axes[0, 1].axis('off')
 
     # ROC & PR 커브
@@ -80,8 +91,97 @@ def model_eval(model_object, model_name: str, X_test, y_test):
         axes[1, 1].set_title('Precision-Recall Curve', fontsize=14)
         axes[1, 1].legend(loc="lower left")
 
-    plt.subplots_adjust(top=0.9, hspace=0.2)
+    plt.subplots_adjust(top=0.9, hspace=0.3)
+    #plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
+
+def custom_threshold_model_eval(model_object, model_name: str, X_test, y_test, my_threshold = 0.4):
+
+    default_preds = model_object.predict(X_test)
+    y_pred_probabilities = model_object.predict_proba(X_test)[:, 1]
+
+    #my_threshold 이상이면 1, 아니면 0으로 예측
+    custom_preds = (y_pred_probabilities >= my_threshold).astype(int)
+
+    # 성능 지표 계산
+    metrics = {
+        '정확도 (Accuracy)': accuracy_score,
+        '정밀도 (Precision)': precision_score,
+        '재현율 (Recall)': recall_score,
+        'F1 점수 (F1-Score)': f1_score,
+        '매튜 상관 계수 (MCC)': matthews_corrcoef
+    }
+    
+    results = {}
+    
+    # 임계치 변경 전 성능 계산
+    before_metrics = {name: func(y_test, default_preds) for name, func in metrics.items()}
+    results['Before (Default: 0.5)'] = before_metrics
+    
+    # 임계치 변경 후 성능 계산
+    after_metrics = {name: func(y_test, custom_preds) for name, func in metrics.items()}
+    results[f'After (Custom: {my_threshold})'] = after_metrics
+
+    # --- 3. Pandas DataFrame으로 결과 출력 ---
+    results_df = pd.DataFrame(results).round(4)
+    
+    print("\n" + "=========================================")
+    print(f"{model_name} 모델 임계치 변경 전/후 성능 비교")
+    print("=========================================")
+    display(results_df) 
+
+    # 혼동 행렬 시각화 
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f'{model_name} 혼동 행렬 비교', fontsize=16)
+
+    # 왼쪽 그래프: 임계치 변경 전
+    cm_before = confusion_matrix(y_test, default_preds, labels=[1, 0])
+    sns.heatmap(cm_before, annot=True, fmt='d', cmap='Blues', ax=axes[0],
+                xticklabels=['폐업(1)', '운영 중(0)'],
+                yticklabels=['폐업(1)', '운영 중(0)'])
+    axes[0].set_aspect('equal')
+    axes[0].set_title(f'Before (Default Threshold: 0.5)', fontsize=14)
+    axes[0].set_xlabel('Predicted Label')
+    axes[0].set_ylabel('True Label')
+
+    # 오른쪽 그래프: 임계치 변경 후
+    cm_after = confusion_matrix(y_test, custom_preds, labels=[1, 0])
+    sns.heatmap(cm_after, annot=True, fmt='d', cmap='Oranges', ax=axes[1],
+                xticklabels=['폐업(1)', '운영 중(0)'],
+                yticklabels=['폐업(1)', '운영 중(0)'])
+    axes[1].set_aspect('equal')
+    axes[1].set_title(f'After (Custom Threshold: {my_threshold})', fontsize=14)
+    axes[1].set_xlabel('Predicted Label')
+    axes[1].set_ylabel('True Label')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95]) 
+    plt.show()
+
+
+def find_optimal_threshold(model_object, model_name: str, X_test, y_test):
+
+    y_pred_proba = model_object.predict_proba(X_test)[:, 1]
+    
+    best_threshold = 0.5
+    best_f1 = 0
+    
+    # 0.01부터 0.99까지 0.01 간격으로 임계치를 테스트
+    thresholds = np.arange(0.01, 1.0, 0.01)
+    
+    for threshold in thresholds:
+        # 현재 임계값을 기준으로 예측값을 설정
+        preds = (y_pred_proba >= threshold).astype(int)
+        
+        # F1-Score 계산
+        f1 = f1_score(y_test, preds)
+        
+        # 만약 현재 F1-Score가 기록된 최고 점수보다 높으면, 갱신
+        if f1 > best_f1:
+            best_f1 = f1
+            best_threshold = threshold
+            
+    print(f"최적의 임계치: {best_threshold:.2f}, F1-Score: {best_f1:.4f}")
+    custom_threshold_model_eval(model_object, model_name,X_test, y_test,my_threshold = best_threshold)
 
 
 class ModelTuner:
@@ -307,7 +407,7 @@ class ModelTuner:
 class Boost_model:
     def __init__(self,model_type: str,train_data,GPU ='off',
                  early_stopping_rounds = 50,n_estimators=500,learning_rate=0.05,
-                 min_gain_to_split=0.05, random_state=42, subsample=0.8,colsample_bytree=0.8):
+                 min_split_gain=0.05, random_state=42, subsample=0.8,colsample_bytree=0.8):
         
         self.train_data = train_data
         self.model_type = model_type
@@ -317,10 +417,15 @@ class Boost_model:
         self.subsample = subsample
         self.colsample_bytree = colsample_bytree
         self.random_state = random_state
-        self.min_gain_to_split = min_gain_to_split
+        self.min_split_gain = min_split_gain
         self.scale_pos_weight = (len(self.train_data.y_train) - sum(self.train_data.y_train)) / sum(self.train_data.y_train)
         self.check_point = 0
         self.GPU = GPU
+
+        if self.model_type == 'lgbm':
+            self.title = "Light Gradient Boosting Machine"
+        elif self.model_type == 'xgb':
+            self.title = "Exreme Gradient Boosting"
 
         params = {
         'n_estimators': self.n_estimators,
@@ -333,7 +438,7 @@ class Boost_model:
 
             params.update({
             'class_weight': 'balanced',
-            'min_gain_to_split': self.min_gain_to_split})    
+            'min_split_gain': self.min_split_gain})    
             
             if self.GPU == 'on':
                 params['device'] = 'cuda'                  
@@ -375,14 +480,10 @@ class Boost_model:
 
     def evaluation(self):
         self.fit()
-        if self.model_type == 'lgbm':
-            title = "Light Gradient Boosting Machine"
-        elif self.model_type == 'xgb':
-            title = "Exreme Gradient Boosting"
-        else:
+        if self.model is None:
             raise ValueError("정확한 부스트 모델명을 입력해주세요(lgbm,xgb)")
         
-        model_eval(self.model,title,self.train_data.X_test,self.train_data.y_test)
+        model_eval(self.model,self.title,self.train_data.X_test,self.train_data.y_test)
 
     def plot_feature_importance(self,top_n=20):
         if self.check_point == 0:
@@ -424,7 +525,13 @@ class Boost_model:
         plt.ylabel("Feature")
         plt.title(f"{self.model_type} Top 20 Features by Permutation Importance")
         plt.gca().invert_yaxis() 
-        plt.show()   
+        plt.show()
+
+    def optimal_threshold(self):
+        find_optimal_threshold(self.model, self.title, self.train_data.X_test, self.train_data.y_test)
+
+    def custom_threshold(self,my_threshold = 0.5): 
+        custom_threshold_model_eval(self.model, self.title, self.train_data.X_test, self.train_data.y_test, my_threshold = my_threshold)  
 
 class ShapAnalysis:
     """
@@ -447,11 +554,15 @@ class ShapAnalysis:
         # 분석 결과를 저장할 인스턴스 변수
         self.single_data_point = None
         self.shap_values_single = None
+        self.answer = None
+        self.top5_positive = None
         self.expected_value = self.explainer.expected_value
 
     def select_sample(self, index=0):
         """분석을 수행할 단일 데이터 샘플을 선택합니다."""
         self.single_data_point = self.X_test.iloc[[index]]
+        self.answer = self.y_test.iloc[index]
+
         self.shap_values_single = self.explainer.shap_values(self.single_data_point)
         print(f"--- 데이터 인덱스 {index}번 샘플에 대한 분석을 시작합니다. ---")
         return self
@@ -465,12 +576,14 @@ class ShapAnalysis:
             raise ValueError("먼저 `select_sample` 메서드를 호출하여 분석할 데이터를 선택해주세요.")
 
         probability_class_1 = self.model.predict_proba(self.single_data_point)[0, 1]
+        answer_dic = {0: "정상", 1: "폐업 위기"}
+        answer = answer_dic[self.answer]
         
         print("\n" + "="*60)
-        print("예측 기여도 텍스트 요약")
-        print("="*60)
+        print(f"가맹정 현황: {answer}({self.answer})")
         print(f"🎯 가맹점이 폐업할 예측 확률: {probability_class_1:.4f}\n")
         print(f"📊 모델의 평균 예측 기준값 (Base Value): {self.expected_value[0]:.4f}\n")
+        
 
         shap_df = pd.DataFrame({
             'Feature': self.single_data_point.columns,
@@ -479,12 +592,58 @@ class ShapAnalysis:
         
         positive_shap_df = shap_df[shap_df['SHAP Value (기여도)'] > 0]
         
-        top5_positive = positive_shap_df.sort_values(by='SHAP Value (기여도)', ascending=False)
-        
-        print("폐업 예측 요인 TOP 5 피쳐:")
+        positive_shap_df = positive_shap_df.sort_values(by='SHAP Value (기여도)', ascending=False)
+        self.top5_positive = positive_shap_df.head(5)
 
-        print(top5_positive.head(5).to_string())
-   
+        print("폐업 예측 요인 TOP 5 피쳐:")
+        display(self.top5_positive)
+
+        
+        
+    def LLM_summary(self):
+
+
+        llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,  
+        )
+
+        #표 형식을 글자로 변환
+        table_string = self.top5_positive.to_markdown(index=False)
+
+        #프롬프트
+        prompt_template = """
+        당신은 위기 상황의 소상공인을 위한 최고의 비즈니스 컨설턴트입니다.
+        다음은 특정 가계의 폐업에 영향을 미치는 요인과 그 중요도(가중치)를 나타내는 표입니다.
+
+        {table_data}
+
+        ### 분석 가이드라인
+        - 단순히 가중치가 높은 순서대로 요인을 나열하지 마세요.
+        - **서로 연관된 요인들은 하나의 핵심 문제로 묶어서 종합적으로 해석해야 합니다.** 예를 들어, '최근 3개월 매출 하락'과 '최근 6개월 매출 하락' 요인이 함께 있다면, 이는 '장기적인 매출 감소 추세'라는 하나의 통합된 인사이트로 분석해야 합니다.
+
+        ### 당신의 과업
+        1.  **핵심 위험 요약**: 표를 분석하여 가장 중요한 3가지 핵심 요인을 종합적으로 고려하고, **한 문장으로 요약**해주세요.
+        2.  **솔루션 제시**: 위에서 분석한 핵심 위험을 바탕으로, 실행 가능한 **구체적인 해결 방안 3가지**를 제시해주세요.
+
+        ### 결과 출력 형식
+        결과는 다음 형식에 맞춰 작성해주세요.
+
+        **[핵심 위험 요약]**
+        (여기에 한 문장 요약)
+
+        **[솔루션 제안]**
+        1. **솔루션 1**: (첫 번째 해결 방안과 그에 대한 설명)
+        2. **솔루션 2**: (두 번째 해결 방안과 그에 대한 설명)
+        3. **솔루션 3**: (세 번째 해결 방안과 그에 대한 설명)
+        """
+        prompt = PromptTemplate(template=prompt_template,input_variables=["table_data"])
+        chain = prompt | llm
+        result = chain.invoke({"table_data": table_string})
+
+        print('*********************가맹점 위험 요소 분석*********************')
+        print(result.content)
+
         
     def force_plot(self):
         """단일 예측에 대한 SHAP Force Plot을 시각화합니다."""
@@ -519,19 +678,13 @@ class ShapAnalysis:
         
         print("\n>>>Custom Bar Plot (폐업 예측 긍정 영향 TOP 5)")
         
-        shap_df = pd.DataFrame({
-            'Feature': self.single_data_point.columns,
-            'SHAP Value': self.shap_values_single.flatten()
-        })
-
-        positive_shap_df = shap_df[shap_df['SHAP Value'] > 0].sort_values(by='SHAP Value', ascending=False)
-        top5_positive_plot = positive_shap_df.head(5).sort_values(by='SHAP Value', ascending=True)
+        top5_positive_plot = self.top5_positive.sort_values(by='SHAP Value (기여도)', ascending=False)
         colors = ['red'] * len(top5_positive_plot)
         
-        plt.figure(figsize=(10, 6))
-        plt.barh(top5_positive_plot['Feature'], top5_positive_plot['SHAP Value'], color=colors)
+        plt.figure(figsize=(8, 5))
+        plt.barh(top5_positive_plot['Feature'], top5_positive_plot['SHAP Value (기여도)'], color=colors)
         plt.title("폐업 예측 긍정 영향 TOP 5", fontsize=16)
-        plt.xlabel("SHAP Value (Contribution to Prediction)", fontsize=12)
+        plt.xlabel("SHAP Value (기여도)", fontsize=12)
         plt.grid(axis='x', linestyle='--', alpha=0.6)
         plt.axvline(x=0, color='black', linewidth=0.8)
         plt.tight_layout()
@@ -540,5 +693,11 @@ class ShapAnalysis:
     def single_sample_analysis(self,index=0):
         self.select_sample(index=index)
         self.text_summary()
+        self.LLM_summary()
         self.custom_bar_plot()
         self.force_plot()
+
+    def LLM_analysis(self,index=0):
+        self.select_sample(index=index)
+        self.text_summary()
+        self.LLM_summary()  
